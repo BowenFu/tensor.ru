@@ -41,53 +41,56 @@ impl<Data> Tensor<Data> where Data: Debug + Copy
     fn at(&self, indices: &[usize]) -> Data
     {
         assert_eq!(indices.len(), self.stride.len());
-        println!("{:?}", self);
         for (&x, &y) in self.extent.iter().zip(indices.iter()) {
             assert!(x>y);
         }
         let index : isize = self.stride.iter().zip(indices.iter()).map(|(&x, &y)|x* y as isize).sum();
         self.data[(self.offset as isize + index) as usize]
     }
-    fn slice(&self, begins: &[usize], ends: &[usize], steps: &[isize]) -> Tensor<Data>
-    {
-        assert_eq!(begins.len(), self.stride.len());
-        assert_eq!(begins.len(), ends.len());
-        assert_eq!(begins.len(), steps.len());
-        for (&x, &y) in self.extent.iter().zip(begins.iter()) {
-            assert!(x>y);
-        }
-        for (&x, &y) in self.extent.iter().zip(ends.iter()) {
-            assert!(x>y);
-        }
-        let offset : usize = self.stride.iter().zip(begins.iter()).map(|(&x, &y)|x as usize *y).sum();
-        let extent : Vec<usize> = begins.iter().zip(ends.iter()).zip(steps.iter()).map(|((&x, &y), &z)|(((y as isize)- (x as isize))/z) as usize).collect();
-        let stride = self.stride.iter().zip(steps.iter()).map(|(&x, &y)|x*y).collect();
-        Tensor { extent : extent, stride : stride, data : self.data.clone(), offset : offset}
-    }
 }
 
-struct TensorIter<Type>
+fn slice<Data>(tensor: &Tensor<Data>, begins: &[usize], ends: &[usize], steps: &[isize]) -> Tensor<Data>
 {
-    tensor: &Tensor<Type>,
-    extent: Vec<usize>
+    assert_eq!(begins.len(), tensor.stride.len());
+    assert_eq!(begins.len(), ends.len());
+    assert_eq!(begins.len(), steps.len());
+    for (&x, &y) in tensor.extent.iter().zip(begins.iter()) {
+        assert!(x>y);
+    }
+    for (&x, &y) in tensor.extent.iter().zip(ends.iter()) {
+        assert!(x>y);
+    }
+    let offset : usize = tensor.stride.iter().zip(begins.iter()).map(|(&x, &y)|x as usize *y).sum();
+    let extent : Vec<usize> = begins.iter().zip(ends.iter()).zip(steps.iter()).map(|((&x, &y), &z)|(((y as isize)- (x as isize))/z) as usize).collect();
+    let stride = tensor.stride.iter().zip(steps.iter()).map(|(&x, &y)|x*y).collect();
+    Tensor { extent : extent, stride : stride, data : tensor.data.clone(), offset : offset}
 }
 
-impl<Type> Iterator 
-
-impl<Type: std::iter::Iterator<Item = Type>> IntoIterator for Tensor<Type>
+fn permute<Data>(tensor : &Tensor<Data>, permutation: &[usize]) -> Tensor<Data>
 {
-    type Item = Type;
-    type IntoIter = Type;
-    fn into_iter(self) -> <Self as std::iter::IntoIterator>::IntoIter {
-        todo!()
+    let len = permutation.len();
+    assert_eq!(len, tensor.extent.len());
+    for p in permutation {
+        assert!(*p < len);
     }
+    let mut extent = vec![0; len];
+    let mut stride = vec![0; len];
+    for (i, p) in permutation.iter().enumerate() {
+        extent[i] = tensor.extent[*p];
+        stride[i] = tensor.stride[*p];
+    }
+    Tensor { extent : extent, stride : stride, data : tensor.data.clone(), offset : tensor.offset}
 }
 
 fn main() {
     let x = Tensor::from2d(&[&[ 4.0, 3.0, 6.0], &[3.2, 2.0, 4.0], &[6.0, 1.5, 6.7]]);
     println!("{}", x.at(&[1, 0]));
-    let y = x.slice(&[1, 2], &[2,0], &[1, -1]);
+    let y = slice(&x, &[1, 2], &[2,0], &[1, -1]);
     println!("{:?}", y);
     println!("{}", y.at(&[0, 0]));
     println!("{}", y.at(&[0, 1]));
+    let z = permute(&y, &[1, 0]);
+    println!("{:?}", z);
+    println!("{}", z.at(&[0, 0]));
+    println!("{}", z.at(&[1, 0]));
 }
