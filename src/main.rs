@@ -82,6 +82,50 @@ fn permute<Data>(tensor : &Tensor<Data>, permutation: &[usize]) -> Tensor<Data>
     Tensor { extent : extent, stride : stride, data : tensor.data.clone(), offset : tensor.offset}
 }
 
+fn reshape<Data>(tensor : &Tensor<Data>, shape: &[usize]) -> Tensor<Data>
+{
+    assert_eq!(shape.into_iter().sum::<usize>(), (*(&tensor).extent).into_iter().sum::<usize>());
+    let mut involved_dims = Vec::new();
+    let mut i = 0;
+    let mut j = 0;
+    let mut i_product = 1;
+    let mut j_product = 1;
+    while i < shape.len() && j < tensor.extent.len() {
+        if i_product == 1 && j_product == 1 && shape[i] == tensor.extent[j]
+        {
+            i += 1;
+            j += 1;
+        }
+        else
+        {
+            i_product *= shape[i];
+            j_product *= shape[j];
+            involved_dims.push(j);
+            while i_product != j_product
+            {
+                if i_product < j_product
+                {
+                    i += 1;
+                    i_product *= shape[i];
+                }
+                else
+                {
+                    j += 1;
+                    j_product *= shape[j];
+                    involved_dims.push(j);
+                }
+            }
+            i_product = 1;
+            j_product = 1;
+            i += 1;
+            j += 1;
+        }
+    }
+    let noop : bool = involved_dims.iter().map(|(&i)| i + 1 == tensor.stride.len() || tensor.stride[i] == (tensor.extent[i] as isize * tensor.stride[i+1])).fold(true, |sum, e| sum && e);
+    assert_eq!(noop, true);
+    Tensor { extent : tensor.extent.clone(), stride : tensor.stride.clone(), data : tensor.data.clone(), offset : tensor.offset}
+}
+
 fn main() {
     let x = Tensor::from2d(&[&[ 4.0, 3.0, 6.0], &[3.2, 2.0, 4.0], &[6.0, 1.5, 6.7]]);
     println!("{}", x.at(&[1, 0]));
@@ -93,4 +137,6 @@ fn main() {
     println!("{:?}", z);
     println!("{}", z.at(&[0, 0]));
     println!("{}", z.at(&[1, 0]));
+    let a = reshape(&y, &[1, 2]);
+    // let a = reshape(&z, &[1, 2]);
 }
