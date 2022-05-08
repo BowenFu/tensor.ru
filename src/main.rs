@@ -66,6 +66,23 @@ impl<Data> Tensor<Data> where Data: Debug + Copy
     }
 }
 
+struct TensorIter<Type>
+{
+    tensor: &Tensor<Type>,
+    extent: Vec<usize>
+}
+
+impl<Type> Iterator 
+
+impl<Type: std::iter::Iterator<Item = Type>> IntoIterator for Tensor<Type>
+{
+    type Item = Type;
+    type IntoIter = Type;
+    fn into_iter(self) -> <Self as std::iter::IntoIterator>::IntoIter {
+        todo!()
+    }
+}
+
 fn main() {
     let x = Tensor::from2d(&[&[ 4.0, 3.0, 6.0], &[3.2, 2.0, 4.0], &[6.0, 1.5, 6.7]]);
     println!("{}", x.at(&[1, 0]));
