@@ -44,10 +44,8 @@ impl<'a, Data> Iterator for TensorIterator<'a, Data> where Data: std::fmt::Debug
         }
         else
         {
-            println!("self.offsets: {:?}", self.offsets);
             self.index = self.index + self.offsets[carry_idx as usize]
         }
-        println!("self.index: {}", self.index);
         return Some(self.tensor.index(cur_index))
     }
 }
@@ -92,6 +90,12 @@ impl<Data> Tensor<Data> where Data: Debug + Copy
             }
         }
         Tensor { extent : [data.len(), data[0].len()].to_vec(), stride : [data[0].len() as isize, 1].to_vec(), data : Rc::new(d_) , offset : 0}
+    }
+    fn to_contiguous(&self) -> Self
+    {
+        let stride : Vec<isize> = self.extent.iter().rev().scan(1, |prod, e| Some((*prod * e) as isize)).collect();
+        let data : Vec<Data> = self.into_iter().collect();
+        Tensor { extent : self.extent.clone(), stride : stride, data : Rc::new(data) , offset : 0}
     }
     fn index(&self, idx: isize) -> Data
     {
@@ -141,7 +145,7 @@ fn permute<Data>(tensor : &Tensor<Data>, permutation: &[usize]) -> Tensor<Data>
     Tensor { extent : extent, stride : stride, data : tensor.data.clone(), offset : tensor.offset}
 }
 
-fn reshape<Data>(tensor : &Tensor<Data>, shape: &[usize]) -> Tensor<Data>
+fn reshape<Data>(tensor : &Tensor<Data>, shape: &[usize]) -> Tensor<Data> where Data: std::fmt::Debug + Copy
 {
     assert_eq!(shape.into_iter().product::<usize>(), (*(&tensor).extent).into_iter().product::<usize>());
     let mut involved_dims = Vec::new();
@@ -181,22 +185,21 @@ fn reshape<Data>(tensor : &Tensor<Data>, shape: &[usize]) -> Tensor<Data>
         }
     }
     let noop : bool = involved_dims.iter().map(|&i| i + 1 == tensor.stride.len() || tensor.stride[i] == (tensor.extent[i] as isize * tensor.stride[i+1])).fold(true, |sum, e| sum && e);
-    assert_eq!(noop, true);
-    Tensor { extent : tensor.extent.clone(), stride : tensor.stride.clone(), data : tensor.data.clone(), offset : tensor.offset}
+    if noop {
+        Tensor { extent : tensor.extent.clone(), stride : tensor.stride.clone(), data : tensor.data.clone(), offset : tensor.offset}
+    }
+    else {
+        let stride : Vec<isize> = shape.iter().rev().scan(1, |prod, e| Some((*prod * e) as isize)).collect();
+        let data : Vec<Data> = tensor.into_iter().collect();
+        Tensor { extent : shape.to_vec(), stride : stride, data : Rc::new(data) , offset : 0}
+    }
 }
 
 fn main() {
     let x = Tensor::from2d(&[&[ 11, 12, 13, 14], &[21, 22, 23, 24], &[31, 32, 33, 34], &[41, 42, 43, 44]]);
-    // println!("{}", x.at(&[1, 0]));
     let y = slice(&x, &[1, 3], &[3,0], &[1, -1]);
-    // println!("{}", y.at(&[0, 0]));
-    // println!("{}", y.at(&[0, 1]));
     let z = permute(&y, &[1, 0]);
-    // println!("{:?}", z);
-    // println!("{}", z.at(&[0, 0]));
-    // println!("{}", z.at(&[1, 0]));
-    let a = reshape(&y, &[2, 3, 1]);
-    // let a = reshape(&z, &[1, 2]);
+    let a = reshape(&y, &[3, 2, 1]);
     for c in &[x, y, z ,a] {
         println!("c\n{:?}", c);
         for i in c {
