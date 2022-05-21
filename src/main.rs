@@ -24,6 +24,10 @@ fn get_linear_strides(extent: &[usize]) -> std::vec::Vec<isize> {
     stride.iter().rev().skip(1).cloned().collect::<Vec<isize>>()
 }
 
+fn broadcast_extents(lhs: &[usize], rhs: &[usize]) -> std::vec::Vec<usize> {
+    lhs.iter().zip(rhs.iter()).map(|(&l, &r)|{ if l==1 { r } else if r==1{ l } else { assert_eq!(l, r); l}}).collect::<Vec<usize>>()
+}
+
 impl<'a, Data> Iterator for TensorIterator<'a, Data> where Data: std::fmt::Debug+Copy
 {
     type Item = Data;
@@ -157,6 +161,20 @@ fn unary<Data: Copy+Debug>(tensor : &Tensor<Data>, f :&dyn Fn(Data)->Data) -> Te
     Tensor { extent : tensor.extent.clone(), stride : stride, data : Rc::new(data) , offset : 0}
 }
 
+fn tensor_for_broadcast<Data>(tensor : &Tensor<Data>, extent: &Vec<usize>) -> Tensor<Data>
+{
+    let stride = tensor.extent.iter().zip(tensor.stride.iter()).map(|(&x, & y)| if x == 1 { 0 } else {y}).collect();
+    Tensor { extent : extent.clone(), stride : stride, data : tensor.data.clone(), offset : 0}
+}
+
+fn binary<Data: Copy+Debug>(lhs : &Tensor<Data>, rhs : &Tensor<Data>, f :&dyn Fn(Data, Data)->Data) -> Tensor<Data>
+{
+    let extent = broadcast_extents(&lhs.extent, &rhs.extent);
+    let stride = get_linear_strides(&extent);
+    let data = tensor_for_broadcast(lhs, &extent).into_iter().zip(tensor_for_broadcast(rhs, &extent).into_iter()).map(|(x, y)|f(x, y)).collect();
+    Tensor { extent : extent, stride : stride, data : Rc::new(data) , offset : 0}
+}
+
 fn reshape<Data>(tensor : &Tensor<Data>, shape: &[usize]) -> Tensor<Data> where Data: std::fmt::Debug + Copy
 {
     assert_eq!(shape.into_iter().product::<usize>(), (*(&tensor).extent).into_iter().product::<usize>());
@@ -213,7 +231,9 @@ fn main() {
     let z = permute(&y, &[1, 0]);
     let a = reshape(&y, &[3, 2, 1]);
     let u = unary(&a, &|x : i32|-x);
-    for c in &[x, y, z ,a, u] {
+    let t = Tensor::from2d(&[&[ 11, 12, 13, 14]]);
+    let zero = binary(&x, &t, &|x, y|x+y);
+    for c in &[x, y, z ,a, u, zero] {
         println!("c\n{:?}", c);
         for i in c {
             print!("{}, ", i)
