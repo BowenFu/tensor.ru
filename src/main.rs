@@ -19,6 +19,11 @@ struct TensorIterator<'a, Data>
     end : bool
 }
 
+fn get_linear_strides(extent: &[usize]) -> std::vec::Vec<isize> {
+    let stride : Vec<isize> = [1].iter().chain(extent.iter().rev()).scan(1, |prod, e| {*prod *=  *e as isize; Some(*prod)}).collect();
+    stride.iter().rev().skip(1).cloned().collect::<Vec<isize>>()
+}
+
 impl<'a, Data> Iterator for TensorIterator<'a, Data> where Data: std::fmt::Debug+Copy
 {
     type Item = Data;
@@ -93,7 +98,7 @@ impl<Data> Tensor<Data> where Data: Debug + Copy
     }
     fn to_contiguous(&self) -> Self
     {
-        let stride : Vec<isize> = self.extent.iter().rev().scan(1, |prod, e| Some((*prod * e) as isize)).collect();
+        let stride = get_linear_strides(&self.extent);
         let data : Vec<Data> = self.into_iter().collect();
         Tensor { extent : self.extent.clone(), stride : stride, data : Rc::new(data) , offset : 0}
     }
@@ -145,6 +150,13 @@ fn permute<Data>(tensor : &Tensor<Data>, permutation: &[usize]) -> Tensor<Data>
     Tensor { extent : extent, stride : stride, data : tensor.data.clone(), offset : tensor.offset}
 }
 
+fn unary<Data: Copy+Debug>(tensor : &Tensor<Data>, f :&dyn Fn(Data)->Data) -> Tensor<Data>
+{
+    let stride = get_linear_strides(&tensor.extent);
+    let data = tensor.into_iter().map(f).collect();
+    Tensor { extent : tensor.extent.clone(), stride : stride, data : Rc::new(data) , offset : 0}
+}
+
 fn reshape<Data>(tensor : &Tensor<Data>, shape: &[usize]) -> Tensor<Data> where Data: std::fmt::Debug + Copy
 {
     assert_eq!(shape.into_iter().product::<usize>(), (*(&tensor).extent).into_iter().product::<usize>());
@@ -189,7 +201,7 @@ fn reshape<Data>(tensor : &Tensor<Data>, shape: &[usize]) -> Tensor<Data> where 
         Tensor { extent : tensor.extent.clone(), stride : tensor.stride.clone(), data : tensor.data.clone(), offset : tensor.offset}
     }
     else {
-        let stride : Vec<isize> = shape.iter().rev().scan(1, |prod, e| Some((*prod * e) as isize)).collect();
+        let stride = get_linear_strides(&shape);
         let data : Vec<Data> = tensor.into_iter().collect();
         Tensor { extent : shape.to_vec(), stride : stride, data : Rc::new(data) , offset : 0}
     }
@@ -200,7 +212,8 @@ fn main() {
     let y = slice(&x, &[1, 3], &[3,0], &[1, -1]);
     let z = permute(&y, &[1, 0]);
     let a = reshape(&y, &[3, 2, 1]);
-    for c in &[x, y, z ,a] {
+    let u = unary(&a, &|x : i32|-x);
+    for c in &[x, y, z ,a, u] {
         println!("c\n{:?}", c);
         for i in c {
             print!("{}, ", i)
