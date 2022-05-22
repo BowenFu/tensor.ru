@@ -225,6 +225,23 @@ fn reshape<Data>(tensor : &Tensor<Data>, shape: &[usize]) -> Tensor<Data> where 
     }
 }
 
+fn qsort<Data: std::cmp::PartialOrd + std::clone::Clone>(data: &[Data]) -> std::vec::Vec<Data> {
+    if data.len() == 0 {
+        return vec![];
+    }
+    let first = &data[0];
+    let first_half = &data.iter().skip(1).filter(|&v|*v<*first);
+    let second_half = &data.iter().skip(1).filter(|&v|*v>=*first);
+    first_half.clone().into_iter().chain(std::iter::once(first)).chain(second_half.clone().into_iter()).cloned().collect::<Vec<Data>>()
+}
+
+#[test]
+fn test_qsort(){
+    assert_eq!(qsort(&[1, 2]), [1, 2]);
+    assert_eq!(qsort(&[3, 2]), [2, 3]);
+    assert_eq!(qsort(&[3, 12, 2, 66]), [2, 3, 12, 66]);
+}
+
 fn main() {
     let x = Tensor::from2d(&[&[ 11, 12, 13, 14], &[21, 22, 23, 24], &[31, 32, 33, 34], &[41, 42, 43, 44]]);
     let y = slice(&x, &[1, 3], &[3,0], &[1, -1]);
